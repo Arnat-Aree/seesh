@@ -5,6 +5,8 @@
 #include <limits.h>
 #include "parser.h"
 #include "executor.h"
+#include "signals.h"
+#include "jobs.h"
 
 #define LINE_MAX_LEN 1024
 
@@ -22,11 +24,12 @@ static void print_prompt(void)
 int main(void)
 {
     char line[LINE_MAX_LEN];
-
+    signals_init();
     printf("Welcome to SeeSh v0.1 — type 'exit' to quit\n");
 
     while (1)
     {
+        jobs_reap();
         print_prompt();
 
         if (fgets(line, sizeof(line), stdin) == NULL)
