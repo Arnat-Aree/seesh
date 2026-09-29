@@ -58,3 +58,5 @@ seesh
 seesh-viewer
 
 .DS_Store
+
+*.dSYM/

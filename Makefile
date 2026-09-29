@@ -4,13 +4,13 @@ SRC    = $(wildcard src/*.c)
 
 all: seesh
 
-seesh: $(SRC)
+seesh: $(SRC) $(wildcard src/*.h)
 	$(CC) $(CFLAGS) $(SRC) -o seesh
 
 run: seesh
 	./seesh
 
 clean:
-	rm -f seesh
+	rm -rf seesh seesh.dSYM
 
 .PHONY: all run clean
