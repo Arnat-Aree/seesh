@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>SeeSh Viewer (test)</title>
+<style>
+  body { font-family: monospace; background: #111; color: #ddd; padding: 16px; }
+  .ok  { color: #6c6; }
+</style>
+</head>
+<body>
+<h3>SeeSh Viewer — ทดสอบการเชื่อมต่อ</h3>
+<div id="st">กำลังเชื่อมต่อ...</div>
+<pre id="log"></pre>
+<script>
+const log = document.getElementById('log');
+const st  = document.getElementById('st');
+const es  = new EventSource('/events');
+
+es.onopen  = () => { st.textContent = 'เชื่อมต่อแล้ว ✓'; st.className = 'ok'; };
+es.onerror = () => { st.textContent = 'หลุดการเชื่อมต่อ กำลังลองใหม่...'; st.className = ''; };
+es.onmessage = (e) => {
+  const ev = JSON.parse(e.data);
+  if (ev.type === 'reset') { log.textContent = ''; return; }
+  log.textContent += `[${ev.cmd}] ${ev.type.padEnd(10)} ${ev.syscall.padEnd(18)} pid=${ev.pid}\n`;
+};
+</script>
+</body>
+</html>
