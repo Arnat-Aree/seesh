@@ -6,6 +6,7 @@
 #include "jobs.h"
 #include "events.h"
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
@@ -17,8 +18,17 @@ void exec_simple(simple_cmd_t *sc) {
     ev_emit("exec", "A", "execvp()", "\"name\":\"%s\"", sc->argv[0]);
     signal(SIGPIPE, SIG_DFL);                   /* คืนค่าปกติให้โปรแกรมที่จะรัน */
     execvp(sc->argv[0], sc->argv);
-    fprintf(stderr, "seesh: %s: command not found\n", sc->argv[0]);
-    _exit(127);                                 /* มาถึงบรรทัดนี้ได้แปลว่า exec ล้มเหลว */
+
+    /* มาถึงบรรทัดนี้ได้แปลว่า exec ล้มเหลว */
+    int e = errno;
+    signal(SIGPIPE, SIG_IGN);                   /* กันลูกตายตอนส่ง event ถ้า viewer ปิดไปแล้ว */
+    ev_emit("exec_fail", "A", "execvp()", "\"name\":\"%s\",\"errno\":%d,\"error\":\"%s\"",
+            sc->argv[0], e, strerror(e));
+    if (e == ENOENT)
+        fprintf(stderr, "seesh: %s: command not found\n", sc->argv[0]);
+    else
+        fprintf(stderr, "seesh: %s: %s\n", sc->argv[0], strerror(e));
+    _exit(e == ENOENT ? 127 : 126);             /* 127 = หาไม่เจอ, 126 = เจอแต่รันไม่ได้ (เหมือน bash) */
 }
 
 static const char *builtin_syscall(const char *name) {
@@ -37,7 +47,8 @@ static int run_builtin_redirected(simple_cmd_t *sc) {
     int saved_out = dup(STDOUT_FILENO);
 
     int status = 1;
-    if (apply_redirect(sc) == 0) {
+    int applied = (apply_redirect(sc) == 0);
+    if (applied) {
         status = run_builtin(sc);
         fflush(stdout);                         /* เขียนลงไฟล์ให้หมดก่อนคืนทางออก */
     }
@@ -46,7 +57,7 @@ static int run_builtin_redirected(simple_cmd_t *sc) {
     dup2(saved_out, STDOUT_FILENO);
     close(saved_in);
     close(saved_out);
-    if (sc->out_file)
+    if (applied && sc->out_file)                /* ส่ง event เฉพาะตอนที่เปลี่ยนทางออกไปจริง */
         ev_emit("dup2", "B", "dup2()", "\"fd\":\"stdout\",\"target\":\"terminal\"");
     return status;
 }

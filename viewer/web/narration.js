@@ -8,8 +8,14 @@ const PROGRAM_DESC = {
 const BUILTIN_DESC = { cd: 'เปลี่ยนโฟลเดอร์', pwd: 'แสดงโฟลเดอร์ปัจจุบัน', help: 'แสดงวิธีใช้',
                        jobs: 'แสดงงานเบื้องหลัง', history: 'แสดงคำสั่งที่เคยพิมพ์' };
 
+/* errno → เหตุผลภาษาไทย (เลขเหล่านี้ตรงกันทั้ง macOS และ Linux) */
+const ERRNO_TH = { 2: 'ไม่มีไฟล์หรือโฟลเดอร์นี้', 13: 'ไม่มีสิทธิ์เข้าถึง',
+                   20: 'มีบางส่วนของ path ที่ไม่ใช่โฟลเดอร์', 21: 'เป็นโฟลเดอร์ ไม่ใช่ไฟล์' };
+const reason = d => ERRNO_TH[d.errno] || d.error;
+
 const byType = (events, type) => events.filter(e => e.type === type);
 const first  = (events, type) => events.find(e => e.type === type);
+const modeText = m => m === 'read' ? 'อ่านข้อมูล' : m === 'append' ? 'เขียนต่อท้าย' : 'เขียนทับ';
 
 /* ฉาก: กล่องเรียงจากซ้ายไปขวา */
 function buildScene(cmd) {
@@ -18,17 +24,19 @@ function buildScene(cmd) {
   const items = [];
   if (!parse) return { items };
 
-  const opens = byType(ev, 'open');
-  const inFile = opens.find(o => o.data.mode === 'read');
-  const outFile = opens.find(o => o.data.mode !== 'read');
+  /* ไฟล์ทั้งที่เปิดได้และเปิดไม่ได้ */
+  const fileEvents = ev.filter(e => e.type === 'open' || e.type === 'open_fail');
+  const inFile  = fileEvents.find(o => o.data.mode === 'read');
+  const outFile = fileEvents.find(o => o.data.mode !== 'read');
+  const fileBox = (f, id, okDesc) => ({ kind: 'file', id, icon: '📄', name: f.data.file,
+                                        desc: f.type === 'open_fail' ? '❌ เปิดไม่ได้' : okDesc });
   const outArrow = () => ({ kind: 'arrow', id: 'aout', label: outFile.data.mode === 'append' ? '>>' : '>' });
-  const outBox = () => ({ kind: 'file', id: 'fout', icon: '📄', name: outFile.data.file,
-                          desc: outFile.data.mode === 'append' ? 'เขียนต่อท้าย' : 'เขียนลงไฟล์' });
+  const outDesc = () => outFile.data.mode === 'append' ? 'เขียนต่อท้าย' : 'เขียนลงไฟล์';
 
   const builtin = first(ev, 'builtin');
   if (builtin) {
     items.push({ kind: 'box', id: 'shell', icon: '🐚', name: 'seesh', desc: BUILTIN_DESC[builtin.data.name] || 'คำสั่งในตัว' });
-    if (outFile) items.push(outArrow(), outBox());
+    if (outFile) items.push(outArrow(), fileBox(outFile, 'fout', outDesc()));
     return { items, parse, builtin, outFile };
   }
 
@@ -38,15 +46,14 @@ function buildScene(cmd) {
   if (parse.data.bg)
     items.push({ kind: 'box', id: 'shell', icon: '🐚', name: 'seesh', desc: 'รับคำสั่งต่อได้ทันที' });
   if (inFile)
-    items.push({ kind: 'file', id: 'fin', icon: '📄', name: inFile.data.file, desc: 'ไฟล์ต้นทาง' },
-               { kind: 'arrow', id: 'ain', label: '<' });
+    items.push(fileBox(inFile, 'fin', 'ไฟล์ต้นทาง'), { kind: 'arrow', id: 'ain', label: '<' });
 
   parse.data.names.forEach((n, i) => {
     if (i > 0) items.push({ kind: 'arrow', id: 'p' + i, label: 'ท่อ ' + i });
     items.push({ kind: 'box', id: 'c' + i, icon: '⚙️', name: n, desc: PROGRAM_DESC[n] || 'โปรแกรม', pid: pidOf(i) });
   });
 
-  if (outFile) items.push(outArrow(), outBox());
+  if (outFile) items.push(outArrow(), fileBox(outFile, 'fout', outDesc()));
 
   return { items, parse, inFile, outFile };
 }
@@ -58,9 +65,18 @@ function builtinSteps(cmd, scene, steps) {
   const all = scene.items.map(it => it.id);
   const out = scene.outFile;
 
+  /* เปิดไฟล์ไม่สำเร็จ: shell ไม่ทำคำสั่งเลย */
+  const fail = first(ev, 'open_fail');
+  if (fail) {
+    steps.push({ title: 'เปิดไฟล์ไม่สำเร็จ',
+                 text: `เปิดไฟล์ ${fail.data.file} ไม่ได้: ${reason(fail.data)}\nShell จึงไม่ทำคำสั่ง ${name} และทางออกของ shell ยังเป็นหน้าจอเหมือนเดิม`,
+                 syscall: 'open()', owner: 'B', on: all });
+    return steps;
+  }
+
   if (out) {
     steps.push({ title: 'เปิดไฟล์',
-                 text: `เปิดไฟล์ ${out.data.file} เพื่อ${out.data.mode === 'append' ? 'เขียนต่อท้าย' : 'เขียนทับ'}`,
+                 text: `เปิดไฟล์ ${out.data.file} เพื่อ${modeText(out.data.mode)}`,
                  syscall: 'open()', owner: 'B', on: ['shell', 'fout'] });
     steps.push({ title: 'เปลี่ยนทางออกของ shell ชั่วคราว',
                  text: `Shell จำทางออกเดิม (หน้าจอ) ไว้ก่อน แล้วเปลี่ยนทางออกของตัวเองไปที่ไฟล์ ${out.data.file}`,
@@ -129,12 +145,18 @@ function buildSteps(cmd, scene) {
                  text: `Shell แยกตัวเองออกเป็น process ลูก คนละตัวต่อหนึ่งโปรแกรม (PID ${forks.map(f => f.data.child).join(', ')})\nตัว shell เองยังอยู่ และเป็นแม่ของผู้ช่วยทุกคน`,
                  syscall: 'fork()', owner: 'A', on: [...shell, ...procs, ...pipes] });
 
-  /* 4. open */
+  /* 4. open (สำเร็จ และไม่สำเร็จ) */
   const opens = byType(ev, 'open');
-  if (opens.length)
-    steps.push({ title: 'เปิดไฟล์',
-                 text: opens.map(o => `เปิดไฟล์ ${o.data.file} เพื่อ${o.data.mode === 'read' ? 'อ่านข้อมูล' : o.data.mode === 'append' ? 'เขียนต่อท้าย' : 'เขียนทับ'}`).join('\n'),
-                 syscall: 'open()', owner: 'B', on: [...procs, ...pipes, ...files] });
+  const openFails = byType(ev, 'open_fail');
+  if (opens.length || openFails.length) {
+    const lines = [
+      ...opens.map(o => `เปิดไฟล์ ${o.data.file} เพื่อ${modeText(o.data.mode)}`),
+      ...openFails.map(f => `❌ เปิดไฟล์ ${f.data.file} ไม่ได้: ${reason(f.data)}\nผู้ช่วยคนนี้จึงจบการทำงานทันที โดยไม่ได้รันโปรแกรม`),
+    ];
+    steps.push({ title: openFails.length ? 'เปิดไฟล์ไม่สำเร็จ' : 'เปิดไฟล์',
+                 text: lines.join('\n'), syscall: 'open()', owner: 'B',
+                 on: [...procs, ...pipes, ...files] });
+  }
 
   /* 5. dup2 */
   const dups = byType(ev, 'dup2');
@@ -150,23 +172,37 @@ function buildSteps(cmd, scene) {
                  syscall: 'dup2()', owner: 'B', on: all.filter(id => id !== 'shell') });
   }
 
-  /* 6. exec */
+  /* 6. exec (สำเร็จ และไม่สำเร็จ) */
   const execs = byType(ev, 'exec');
-  if (execs.length)
-    steps.push({ title: 'เริ่มทำงาน',
-                 text: `ผู้ช่วยแต่ละคนเปลี่ยนตัวเองเป็นโปรแกรมจริง: ${execs.map(e => e.data.name).join(', ')}` + (links.length ? '\nข้อมูลเริ่มไหลจากซ้ายไปขวา' : ''),
-                 syscall: 'execvp()', owner: 'A', on: all, flow: links });
+  const execFails = byType(ev, 'exec_fail');
+  if (execs.length) {
+    const failedPid = new Set(execFails.map(f => f.pid));
+    const ok = execs.filter(e => !failedPid.has(e.pid)).map(e => e.data.name);
+    const lines = [];
+    if (ok.length)
+      lines.push(`ผู้ช่วยเปลี่ยนตัวเองเป็นโปรแกรมจริง: ${ok.join(', ')}` + (links.length ? '\nข้อมูลเริ่มไหลจากซ้ายไปขวา' : ''));
+    execFails.forEach(f => lines.push(
+      `❌ ${f.data.name}: ${f.data.errno === 2 ? 'หาโปรแกรมนี้ไม่เจอในทุกโฟลเดอร์ที่อยู่ใน PATH' : reason(f.data)}`));
+    steps.push({ title: !ok.length ? 'เริ่มทำงานไม่สำเร็จ' : execFails.length ? 'เริ่มทำงาน (บางคนไม่สำเร็จ)' : 'เริ่มทำงาน',
+                 text: lines.join('\n'), syscall: 'execvp()', owner: 'A',
+                 on: all, flow: ok.length ? links : [] });
+  }
 
   /* 7. foreground: รอ */
   if (!parse.data.bg) {
     const waits = byType(ev, 'wait');
     if (waits.length) {
-      const bad = waits.filter(w => w.data.status !== 0).map(w =>
-        w.data.status === 127 ? `⚠️ หาโปรแกรม ${nameOf[w.data.child]} ไม่เจอ (status 127)`
-                              : `⚠️ ${nameOf[w.data.child]} จบด้วย status ${w.data.status}`);
+      const openFailPid = new Set(openFails.map(f => f.pid));
+      const bad = waits.filter(w => w.data.status !== 0).map(w => {
+        const who = nameOf[w.data.child], s = w.data.status;
+        if (openFailPid.has(w.data.child)) return `⚠️ ${who} ไม่ได้รัน เพราะเปิดไฟล์ไม่สำเร็จ (status ${s})`;
+        if (s === 127) return `⚠️ หาโปรแกรม ${who} ไม่เจอ (status 127)`;
+        if (s === 126) return `⚠️ เจอ ${who} แต่รันไม่ได้ (status 126)`;
+        return `⚠️ ${who} จบด้วย status ${s}`;
+      });
       steps.push({ title: 'รอทุกคนทำงานเสร็จ',
                    text: `Shell รอจนผู้ช่วย${waits.length > 1 ? 'ทุกคน' : ''}ทำงานเสร็จ แล้วจึงพร้อมรับคำสั่งถัดไป` + (bad.length ? '\n' + bad.join('\n') : ''),
-                   syscall: 'waitpid()', owner: 'A', on: all, flow: links });
+                   syscall: 'waitpid()', owner: 'A', on: all, flow: execFails.length || openFails.length ? [] : links });
     }
     return steps;
   }
