@@ -16,7 +16,10 @@ run: seesh
 viewer: seesh-viewer
 	./seesh-viewer
 
+test: seesh
+	bash tests/run_all.sh
+
 clean:
 	rm -rf seesh seesh.dSYM seesh-viewer seesh-viewer.dSYM
 
-.PHONY: all run viewer clean
+.PHONY: all run viewer test clean

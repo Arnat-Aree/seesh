@@ -35,20 +35,24 @@ static void print_prompt(void) {
 int main(void) {
     char line[LINE_MAX_LEN];
 
+    /* มีคนพิมพ์อยู่หน้าจอไหม (ถ้าคำสั่งถูกป้อนมาจาก script จะไม่พิมพ์ prompt เหมือน bash) */
+    int interactive = isatty(STDIN_FILENO);
+
     signals_init();
     ev_init();
-    printf("Welcome to SeeSh v0.1 — type 'exit' to quit\n");
+    if (interactive)
+        printf("Welcome to SeeSh v0.1 — type 'exit' to quit\n");
 
     while (1) {
         jobs_reap();                           /* เก็บกวาด background job ที่จบแล้ว */
-        print_prompt();
+        if (interactive) print_prompt();
 
-        g_at_prompt = 1;                       /* กำลังรอพิมพ์: Ctrl+C ให้พิมพ์ prompt ใหม่ */
+        g_at_prompt = interactive;             /* กำลังรอพิมพ์: Ctrl+C ให้พิมพ์ prompt ใหม่ */
         char *got = fgets(line, sizeof(line), stdin);
         g_at_prompt = 0;
 
-        if (got == NULL) {                     /* Ctrl+D = จบ */
-            printf("\n");
+        if (got == NULL) {                     /* Ctrl+D หรือคำสั่งจาก script หมดแล้ว = จบ */
+            if (interactive) printf("\n");
             break;
         }
         line[strcspn(line, "\n")] = '\0';      /* ตัด Enter ท้ายบรรทัดออก */
@@ -74,6 +78,6 @@ int main(void) {
         free_command(&cmd);
     }
 
-    printf("Bye!\n");
+    if (interactive) printf("Bye!\n");
     return 0;
 }
