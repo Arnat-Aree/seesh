@@ -4,16 +4,27 @@
 #include "redirect.h"
 #include "pipeline.h"
 #include "jobs.h"
+#include "events.h"
 #include <stdio.h>
+#include <string.h>
+#include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
 
 /* ใช้ในลูกหลัง fork: ต่อ redirect แล้วเปลี่ยนตัวเองเป็นโปรแกรมจริง */
 void exec_simple(simple_cmd_t *sc) {
     if (apply_redirect(sc) < 0) _exit(1);
+    ev_emit("exec", "A", "execvp()", "\"name\":\"%s\"", sc->argv[0]);
+    signal(SIGPIPE, SIG_DFL);                   /* คืนค่าปกติให้โปรแกรมที่จะรัน */
     execvp(sc->argv[0], sc->argv);
     fprintf(stderr, "seesh: %s: command not found\n", sc->argv[0]);
     _exit(127);                                 /* มาถึงบรรทัดนี้ได้แปลว่า exec ล้มเหลว */
+}
+
+static const char *builtin_syscall(const char *name) {
+    if (strcmp(name, "cd") == 0)  return "chdir()";
+    if (strcmp(name, "pwd") == 0) return "getcwd()";
+    return "";
 }
 
 int execute(command_t *cmd) {
@@ -27,8 +38,11 @@ int execute(command_t *cmd) {
     if (cmd->ncmds > 1)                         /* มี | → ให้ pipeline จัดการ */
         return run_pipeline(cmd);
 
-    if (is_builtin(sc->argv[0]))                /* built-in ทำใน shell เอง */
+    if (is_builtin(sc->argv[0])) {              /* built-in ทำใน shell เอง */
+        ev_emit("builtin", "A", builtin_syscall(sc->argv[0]),
+                "\"name\":\"%s\"", sc->argv[0]);
         return run_builtin(sc);
+    }
 
     pid_t pid = fork();                         /* สร้าง process ลูก */
     if (pid < 0) { perror("fork"); return 1; }
@@ -38,6 +52,9 @@ int execute(command_t *cmd) {
         exec_simple(sc);
     }
 
+    ev_emit("fork", "A", "fork()", "\"child\":%d,\"name\":\"%s\",\"index\":0",
+            (int)pid, sc->argv[0]);
+
     if (cmd->background) {                      /* ---- แม่: background ไม่รอ ---- */
         setpgid(pid, pid);
         jobs_add(pid, cmd->raw);
@@ -46,5 +63,7 @@ int execute(command_t *cmd) {
 
     int status;                                 /* ---- แม่: foreground รอ ---- */
     if (waitpid(pid, &status, 0) < 0) { perror("waitpid"); return 1; }
-    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+    int code = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+    ev_emit("wait", "A", "waitpid()", "\"child\":%d,\"status\":%d", (int)pid, code);
+    return code;
 }

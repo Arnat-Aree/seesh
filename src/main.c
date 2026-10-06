@@ -7,6 +7,7 @@
 #include "executor.h"
 #include "signals.h"
 #include "jobs.h"
+#include "events.h"
 
 #define LINE_MAX_LEN 1024
 
@@ -25,6 +26,7 @@ int main(void)
 {
     char line[LINE_MAX_LEN];
     signals_init();
+    ev_init();
     printf("Welcome to SeeSh v0.1 — type 'exit' to quit\n");
 
     while (1)
@@ -54,7 +56,10 @@ int main(void)
             break;
         }
 
-        execute(&cmd);
+        ev_begin(cmd.raw);
+        ev_parse(&cmd);
+        int status = execute(&cmd);
+        ev_end(status);
         free_command(&cmd);
     }
 
