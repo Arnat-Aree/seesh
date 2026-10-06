@@ -9,6 +9,7 @@
 #include "signals.h"
 #include "jobs.h"
 #include "events.h"
+#include "history.h"
 
 #define LINE_MAX_LEN 1024
 
@@ -53,6 +54,7 @@ int main(void) {
         line[strcspn(line, "\n")] = '\0';      /* ตัด Enter ท้ายบรรทัดออก */
 
         if (line[0] == '\0') continue;         /* บรรทัดว่าง: ขึ้น prompt ใหม่ */
+        history_add(line);                     /* บันทึกทุกคำสั่งที่ไม่ว่าง */
 
         command_t cmd;
         if (parse_line(line, &cmd) < 0) {

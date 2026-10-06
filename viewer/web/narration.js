@@ -5,7 +5,8 @@ const PROGRAM_DESC = {
   sort: 'เรียงบรรทัด', head: 'เอาเฉพาะต้นๆ', tail: 'เอาเฉพาะท้ายๆ', echo: 'พิมพ์ข้อความ',
   sleep: 'รอตามเวลา', yes: 'พิมพ์ y ไม่หยุด', uniq: 'ตัดบรรทัดซ้ำ', ps: 'แสดง process',
 };
-const BUILTIN_DESC = { cd: 'เปลี่ยนโฟลเดอร์', pwd: 'แสดงโฟลเดอร์ปัจจุบัน', help: 'แสดงวิธีใช้', jobs: 'แสดงงานเบื้องหลัง' };
+const BUILTIN_DESC = { cd: 'เปลี่ยนโฟลเดอร์', pwd: 'แสดงโฟลเดอร์ปัจจุบัน', help: 'แสดงวิธีใช้',
+                       jobs: 'แสดงงานเบื้องหลัง', history: 'แสดงคำสั่งที่เคยพิมพ์' };
 
 const byType = (events, type) => events.filter(e => e.type === type);
 const first  = (events, type) => events.find(e => e.type === type);
@@ -66,8 +67,11 @@ function builtinSteps(cmd, scene, steps) {
                  syscall: 'dup() + dup2()', owner: 'B', on: all });
   }
 
-  const text = name === 'cd'  ? 'Shell เรียก chdir() เปลี่ยนโฟลเดอร์ของตัวเอง ต้องทำใน shell เพราะถ้าให้ process ลูกทำ ผลจะหายไปพร้อมกับลูก'
-             : name === 'pwd' ? `Shell เรียก getcwd() ถามระบบปฏิบัติการว่าตอนนี้อยู่โฟลเดอร์ไหน แล้วพิมพ์ออก${out ? 'ไปที่ไฟล์' : 'หน้าจอ'}`
+  const dest = out ? 'ไปที่ไฟล์' : 'หน้าจอ';
+  const text = name === 'cd'      ? 'Shell เรียก chdir() เปลี่ยนโฟลเดอร์ของตัวเอง ต้องทำใน shell เพราะถ้าให้ process ลูกทำ ผลจะหายไปพร้อมกับลูก'
+             : name === 'pwd'     ? `Shell เรียก getcwd() ถามระบบปฏิบัติการว่าตอนนี้อยู่โฟลเดอร์ไหน แล้วพิมพ์ออก${dest}`
+             : name === 'history' ? `Shell เก็บทุกคำสั่งที่พิมพ์ไว้ในหน่วยความจำของตัวเอง (ล่าสุด 100 คำสั่ง) แล้วพิมพ์ออก${dest} จึงต้องเป็น built-in`
+             : name === 'jobs'    ? `Shell อ่านรายการงานเบื้องหลังที่ตัวเองจดไว้ แล้วพิมพ์ออก${dest}`
              : `Shell ทำคำสั่งนี้เองโดยไม่ต้องสร้าง process ลูก${out ? ' ผลลัพธ์ไหลลงไฟล์' : ''}`;
   steps.push({ title: 'ทำคำสั่งเองใน shell', text, syscall: scene.builtin.syscall, owner: 'A',
                on: all, flow: out ? ['aout'] : [] });
