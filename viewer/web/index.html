@@ -2,28 +2,47 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<title>SeeSh Viewer (test)</title>
-<style>
-  body { font-family: monospace; background: #111; color: #ddd; padding: 16px; }
-  .ok  { color: #6c6; }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SeeSh Visualizer</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<h3>SeeSh Viewer — ทดสอบการเชื่อมต่อ</h3>
-<div id="st">กำลังเชื่อมต่อ...</div>
-<pre id="log"></pre>
-<script>
-const log = document.getElementById('log');
-const st  = document.getElementById('st');
-const es  = new EventSource('/events');
+<header class="top">
+  <span class="logo">SeeSh Visualizer</span>
+  <span class="sub">step mode</span>
+  <span class="spacer"></span>
+  <span id="conn" class="pill">กำลังเชื่อมต่อ...</span>
+</header>
 
-es.onopen  = () => { st.textContent = 'เชื่อมต่อแล้ว ✓'; st.className = 'ok'; };
-es.onerror = () => { st.textContent = 'หลุดการเชื่อมต่อ กำลังลองใหม่...'; st.className = ''; };
-es.onmessage = (e) => {
-  const ev = JSON.parse(e.data);
-  if (ev.type === 'reset') { log.textContent = ''; return; }
-  log.textContent += `[${ev.cmd}] ${ev.type.padEnd(10)} ${ev.syscall.padEnd(18)} pid=${ev.pid}\n`;
-};
-</script>
+<main class="body">
+  <aside class="side">
+    <div class="side-title">คำสั่งที่พิมพ์ใน shell</div>
+    <div id="cmd-list"></div>
+    <div id="empty" class="empty">ยังไม่มีคำสั่ง<br>ลองพิมพ์คำสั่งใน SeeSh ดูสิ</div>
+  </aside>
+
+  <section class="main">
+    <div class="cmd-line"><span class="prompt">seesh$</span> <span id="cmd-raw">—</span></div>
+    <div id="flow" class="flow"></div>
+    <div class="story">
+      <div id="step-no" class="step-no"></div>
+      <div id="step-title" class="step-title">เลือกคำสั่งทางซ้าย</div>
+      <div id="step-text" class="step-text"></div>
+      <span id="step-tag" class="tag"></span>
+      <div class="controls">
+        <button id="btn-prev" title="ก่อนหน้า">⏮</button>
+        <button id="btn-play" title="เล่นอัตโนมัติ">▶</button>
+        <button id="btn-next" title="ถัดไป">⏭</button>
+        <input id="slider" type="range" min="0" max="0" value="0">
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="narration.js"></script>
+<script src="flow.js"></script>
+<script src="story.js"></script>
+<script src="playback.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

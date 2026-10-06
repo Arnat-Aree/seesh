@@ -1,0 +1,69 @@
+/* style.css (B) — หน้าตาหน้าเว็บ, สี A/B/C */
+:root {
+  --bg: #15171c; --panel: #1d2027; --panel2: #252932; --border: #333845;
+  --text: #e6e8ee; --muted: #8a90a0; --accent: #7aa2ff; --green: #5fd38d;
+  --A: #b18cff; --B: #4fd1c5; --C: #ffa657;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+       font-family: "Sarabun", "Thonburi", "Tahoma", system-ui, sans-serif; font-size: 15px; }
+.mono { font-family: ui-monospace, Menlo, monospace; }
+
+.top { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.logo { font-weight: 700; font-size: 17px; }
+.sub { color: var(--muted); font-size: 13px; }
+.spacer { flex: 1; }
+.pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #3a2a2a; color: #ff9b9b; }
+.pill.on { background: #1f3a2b; color: var(--green); }
+
+.body { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 50px); }
+.side { border-right: 1px solid var(--border); padding: 12px; background: var(--panel); overflow-y: auto; }
+.side-title { font-size: 12px; color: var(--muted); margin: 0 4px 8px; }
+.cmd-item { display: block; width: 100%; text-align: left; background: transparent; border: 1px solid transparent;
+            border-radius: 8px; padding: 8px 10px; margin-bottom: 4px; color: var(--text); cursor: pointer; }
+.cmd-item:hover { background: var(--panel2); }
+.cmd-item.sel { background: var(--panel2); border-color: var(--border); }
+.cmd-item .raw { font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
+.cmd-item .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.owner { display: inline-block; font-size: 10px; padding: 0 6px; border-radius: 4px; margin-left: 6px; }
+.owner.A { background: #2b2440; color: var(--A); }
+.owner.B { background: #173533; color: var(--B); }
+.owner.C { background: #3a2a17; color: var(--C); }
+.empty { color: var(--muted); font-size: 13px; text-align: center; margin-top: 40px; line-height: 1.7; }
+
+.main { padding: 20px 24px; min-width: 0; }
+.cmd-line { font-family: ui-monospace, Menlo, monospace; font-size: 16px; background: var(--panel);
+            border-radius: 8px; padding: 10px 14px; margin-bottom: 20px; }
+.prompt { color: var(--green); }
+
+.flow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;
+        min-height: 160px; margin-bottom: 20px; }
+.box { background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+       text-align: center; min-width: 110px; opacity: .3; transition: opacity .3s, border-color .3s; }
+.box.on { opacity: 1; border: 2px solid var(--accent); }
+.box.file { border-style: dashed; }
+.box.file.on { border: 2px dashed var(--green); }
+.box .icon { font-size: 22px; }
+.box .name { font-family: ui-monospace, Menlo, monospace; font-weight: 600; margin-top: 4px; }
+.box .desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.box .pid { font-size: 11px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; margin-top: 4px; }
+.arrow { color: var(--muted); text-align: center; font-size: 12px; opacity: .25; min-width: 60px; transition: opacity .3s; }
+.arrow.on { opacity: 1; color: var(--green); }
+.arrow .shaft { font-size: 24px; line-height: 1; }
+.arrow.flowing .shaft { animation: flow 1s linear infinite; }
+@keyframes flow { 0% { transform: translateX(-6px); opacity: .4; } 50% { opacity: 1; } 100% { transform: translateX(6px); opacity: .4; } }
+
+.story { background: var(--panel); border-radius: 12px; padding: 16px 18px; }
+.step-no { font-size: 12px; color: var(--muted); }
+.step-title { font-size: 18px; font-weight: 600; margin: 4px 0 6px; }
+.step-text { color: #c4c8d4; line-height: 1.75; min-height: 52px; white-space: pre-line; }
+.tag { display: inline-block; margin-top: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+       padding: 2px 10px; border-radius: 6px; background: #2b2440; color: var(--A); }
+.tag:empty { display: none; }
+.tag.B { background: #173533; color: var(--B); }
+.tag.C { background: #3a2a17; color: var(--C); }
+.controls { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.controls button { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+                   padding: 6px 12px; cursor: pointer; font-size: 14px; }
+.controls button:hover { border-color: var(--accent); }
+.controls input { flex: 1; accent-color: var(--accent); }
