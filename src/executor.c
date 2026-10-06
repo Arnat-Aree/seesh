@@ -27,10 +27,34 @@ static const char *builtin_syscall(const char *name) {
     return "";
 }
 
+/* built-in ที่มี redirect: เปลี่ยน stdin/stdout ของ shell ชั่วคราว แล้วคืนค่าเดิม */
+static int run_builtin_redirected(simple_cmd_t *sc) {
+    if (!sc->in_file && !sc->out_file)
+        return run_builtin(sc);
+
+    fflush(stdout);                             /* ล้างข้อความค้างก่อนเปลี่ยนทางออก */
+    int saved_in  = dup(STDIN_FILENO);          /* จำทางเข้า-ออกเดิมของ shell ไว้ */
+    int saved_out = dup(STDOUT_FILENO);
+
+    int status = 1;
+    if (apply_redirect(sc) == 0) {
+        status = run_builtin(sc);
+        fflush(stdout);                         /* เขียนลงไฟล์ให้หมดก่อนคืนทางออก */
+    }
+
+    dup2(saved_in, STDIN_FILENO);               /* คืนทางเข้า-ออกเดิม: ไม่อย่างนั้น prompt จะไปลงไฟล์ด้วย */
+    dup2(saved_out, STDOUT_FILENO);
+    close(saved_in);
+    close(saved_out);
+    if (sc->out_file)
+        ev_emit("dup2", "B", "dup2()", "\"fd\":\"stdout\",\"target\":\"terminal\"");
+    return status;
+}
+
 int execute(command_t *cmd) {
     simple_cmd_t *sc = &cmd->cmds[0];
 
-    if (cmd->background && cmd->ncmds > 1) {    /* จะทำในเฟส 2 */
+    if (cmd->background && cmd->ncmds > 1) {    /* ยังไม่รองรับ */
         fprintf(stderr, "seesh: background pipeline ยังไม่รองรับ\n");
         return 1;
     }
@@ -41,7 +65,7 @@ int execute(command_t *cmd) {
     if (is_builtin(sc->argv[0])) {              /* built-in ทำใน shell เอง */
         ev_emit("builtin", "A", builtin_syscall(sc->argv[0]),
                 "\"name\":\"%s\"", sc->argv[0]);
-        return run_builtin(sc);
+        return run_builtin_redirected(sc);
     }
 
     pid_t pid = fork();                         /* สร้าง process ลูก */

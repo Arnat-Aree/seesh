@@ -17,17 +17,22 @@ function buildScene(cmd) {
   const items = [];
   if (!parse) return { items };
 
+  const opens = byType(ev, 'open');
+  const inFile = opens.find(o => o.data.mode === 'read');
+  const outFile = opens.find(o => o.data.mode !== 'read');
+  const outArrow = () => ({ kind: 'arrow', id: 'aout', label: outFile.data.mode === 'append' ? '>>' : '>' });
+  const outBox = () => ({ kind: 'file', id: 'fout', icon: '📄', name: outFile.data.file,
+                          desc: outFile.data.mode === 'append' ? 'เขียนต่อท้าย' : 'เขียนลงไฟล์' });
+
   const builtin = first(ev, 'builtin');
   if (builtin) {
     items.push({ kind: 'box', id: 'shell', icon: '🐚', name: 'seesh', desc: BUILTIN_DESC[builtin.data.name] || 'คำสั่งในตัว' });
-    return { items, parse, builtin };
+    if (outFile) items.push(outArrow(), outBox());
+    return { items, parse, builtin, outFile };
   }
 
   const forks = byType(ev, 'fork');
   const pidOf = i => (forks.find(f => f.data.index === i) || {}).data?.child;
-  const opens = byType(ev, 'open');
-  const inFile = opens.find(o => o.data.mode === 'read');
-  const outFile = opens.find(o => o.data.mode !== 'read');
 
   if (parse.data.bg)
     items.push({ kind: 'box', id: 'shell', icon: '🐚', name: 'seesh', desc: 'รับคำสั่งต่อได้ทันที' });
@@ -40,12 +45,38 @@ function buildScene(cmd) {
     items.push({ kind: 'box', id: 'c' + i, icon: '⚙️', name: n, desc: PROGRAM_DESC[n] || 'โปรแกรม', pid: pidOf(i) });
   });
 
-  if (outFile)
-    items.push({ kind: 'arrow', id: 'aout', label: outFile.data.mode === 'append' ? '>>' : '>' },
-               { kind: 'file', id: 'fout', icon: '📄', name: outFile.data.file,
-                 desc: outFile.data.mode === 'append' ? 'เขียนต่อท้าย' : 'เขียนลงไฟล์' });
+  if (outFile) items.push(outArrow(), outBox());
 
   return { items, parse, inFile, outFile };
+}
+
+/* ขั้นตอนของ built-in (ทำใน shell เอง ไม่มี process ลูก) */
+function builtinSteps(cmd, scene, steps) {
+  const ev = cmd.events;
+  const name = scene.builtin.data.name;
+  const all = scene.items.map(it => it.id);
+  const out = scene.outFile;
+
+  if (out) {
+    steps.push({ title: 'เปิดไฟล์',
+                 text: `เปิดไฟล์ ${out.data.file} เพื่อ${out.data.mode === 'append' ? 'เขียนต่อท้าย' : 'เขียนทับ'}`,
+                 syscall: 'open()', owner: 'B', on: ['shell', 'fout'] });
+    steps.push({ title: 'เปลี่ยนทางออกของ shell ชั่วคราว',
+                 text: `Shell จำทางออกเดิม (หน้าจอ) ไว้ก่อน แล้วเปลี่ยนทางออกของตัวเองไปที่ไฟล์ ${out.data.file}`,
+                 syscall: 'dup() + dup2()', owner: 'B', on: all });
+  }
+
+  const text = name === 'cd'  ? 'Shell เรียก chdir() เปลี่ยนโฟลเดอร์ของตัวเอง ต้องทำใน shell เพราะถ้าให้ process ลูกทำ ผลจะหายไปพร้อมกับลูก'
+             : name === 'pwd' ? `Shell เรียก getcwd() ถามระบบปฏิบัติการว่าตอนนี้อยู่โฟลเดอร์ไหน แล้วพิมพ์ออก${out ? 'ไปที่ไฟล์' : 'หน้าจอ'}`
+             : `Shell ทำคำสั่งนี้เองโดยไม่ต้องสร้าง process ลูก${out ? ' ผลลัพธ์ไหลลงไฟล์' : ''}`;
+  steps.push({ title: 'ทำคำสั่งเองใน shell', text, syscall: scene.builtin.syscall, owner: 'A',
+               on: all, flow: out ? ['aout'] : [] });
+
+  if (byType(ev, 'dup2').some(d => d.data.target === 'terminal'))
+    steps.push({ title: 'คืนทางออกเดิม',
+                 text: 'Shell เปลี่ยนทางออกกลับไปที่หน้าจอเหมือนเดิม เพราะ built-in ทำงานในตัว shell เอง ถ้าไม่คืน prompt และคำสั่งถัดๆ ไปทั้งหมดจะถูกเขียนลงไฟล์ด้วย',
+                 syscall: 'dup2()', owner: 'B', on: ['shell'] });
+  return steps;
 }
 
 /* ขั้นตอน: เรียงตามชนิด event ไม่ใช่ตามลำดับที่มาถึง */
@@ -68,6 +99,7 @@ function buildSteps(cmd, scene) {
   const why = [];
   if (scene.builtin) {
     why.push(`${scene.builtin.data.name} เป็นคำสั่งในตัว shell จึงทำเองได้เลย ไม่ต้องสร้าง process ลูก`);
+    if (scene.outFile) why.push(`เห็นเครื่องหมาย ${scene.outFile.data.mode === 'append' ? '>>' : '>'} จึงต้องส่งผลลัพธ์ลงไฟล์แทนหน้าจอ`);
   } else {
     const n = parse.data.ncmds;
     why.push(n > 1 ? `เห็นเครื่องหมาย | จึงรู้ว่ามี ${n} โปรแกรมที่ต้องทำงานต่อกันเป็นสายพาน`
@@ -78,15 +110,7 @@ function buildSteps(cmd, scene) {
   }
   steps.push({ title: 'อ่านคำสั่ง', text: why.join('\n'), syscall: 'parse', owner: 'A', on: shell });
 
-  /* built-in: จบแค่นี้ */
-  if (scene.builtin) {
-    const name = scene.builtin.data.name;
-    const text = name === 'cd'  ? 'Shell เรียก chdir() เปลี่ยนโฟลเดอร์ของตัวเอง ต้องทำใน shell เพราะถ้าให้ process ลูกทำ ผลจะหายไปพร้อมกับลูก'
-               : name === 'pwd' ? 'Shell เรียก getcwd() ถามระบบปฏิบัติการว่าตอนนี้อยู่โฟลเดอร์ไหน แล้วพิมพ์ออกหน้าจอ'
-               : 'Shell ทำคำสั่งนี้เองโดยไม่ต้องสร้าง process ลูก';
-    steps.push({ title: 'ทำคำสั่งเองใน shell', text, syscall: scene.builtin.syscall, owner: 'A', on: shell });
-    return steps;
-  }
+  if (scene.builtin) return builtinSteps(cmd, scene, steps);
 
   /* 2. pipe */
   if (byType(ev, 'pipe').length)
