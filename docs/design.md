@@ -85,7 +85,9 @@ void free_command(command_t *cmd);
 | | `int ev_begin(const char *raw)` | เริ่มคำสั่งใหม่ ส่ง `cmd_start` |
 | | `void ev_parse(const command_t *cmd)` | ส่ง `parse` |
 | | `void ev_end(int status)` | ส่ง `cmd_end` |
-| | `ev_emit(type, owner, syscall, fmt, ...)` | ส่ง event 1 บรรทัด |
+| | `int ev_cmd(void)` | เลขคำสั่งปัจจุบัน |
+| | `ev_emit_cmd(cmd, type, owner, syscall, fmt, ...)` | ส่ง event 1 บรรทัดของคำสั่งที่ระบุ (ใช้กับ `signal`/`bg_done` ที่มาหลังคำสั่งจบแล้ว) |
+| | `ev_emit(type, owner, syscall, fmt, ...)` | macro: เหมือน `ev_emit_cmd` แต่ใช้เลขคำสั่งปัจจุบัน |
 
 ## 5. Signal
 
@@ -167,13 +169,29 @@ Background job ถูกแยกไปอยู่ process group ของต�
 | `/<ไฟล์>` | ไฟล์ใน `viewer/web/` (ปฏิเสธ path ที่มี `..`) |
 | `/events` | Server-Sent Events: ส่ง event เก่าทั้งหมดก่อน แล้วส่ง event ใหม่ทันทีที่มาถึง |
 
+- ต้องรันจากโฟลเดอร์รากของโปรเจกต์ (`make viewer`) เพราะหาไฟล์หน้าเว็บจาก path `viewer/web`
+- ตั้ง `SO_REUSEADDR` ให้ปิดแล้วเปิดใหม่ได้ทันที
 - ใช้ `poll()` รอ socket, FIFO และ browser ที่เปิดค้างไว้พร้อมกัน ไม่ใช้ thread
 - เปิดฝั่งเขียนของ FIFO ค้างไว้เอง เพื่อไม่ให้ได้ EOF ทุกครั้งที่ shell ปิด
 - รับเฉพาะการเชื่อมต่อจากเครื่องตัวเอง (`127.0.0.1:8080`)
 - เมื่อได้ `cmd_start` ของคำสั่งที่ 1 แปลว่า shell เริ่มใหม่ จะล้าง event เก่าและส่ง `reset`
-- เก็บ event สูงสุด 5000 ตัว
+- เก็บ event สูงสุด 5000 ตัว และรับ browser พร้อมกันได้สูงสุด 16 หน้าต่าง
 
-## 9. กติกาการแก้สัญญากลาง
+## 9. หน้าเว็บ
+
+หน้าเว็บเป็น HTML/CSS/JavaScript ล้วน ไม่ใช้ library ภายนอก
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `app.js` | เปิด `EventSource('/events')` จัดกลุ่ม event ตามเลข `cmd` แสดงรายการคำสั่ง และสั่งวาดใหม่เมื่อมี event เข้ามา |
+| `narration.js` | แปลง event ของ 1 คำสั่งเป็น**ฉาก** (กล่อง process ท่อ ไฟล์ ที่ต้องวาด) และ**ขั้นตอน** (ชื่อขั้น คำอธิบาย ป้าย system call และกล่องที่ต้องเน้น) |
+| `flow.js` | วาดฉากตามขั้นที่เลือก |
+| `story.js` | แสดงคำอธิบายของขั้นที่เลือก |
+| `playback.js` | ปุ่ม ⏮ ▶ ⏭ และแถบเลื่อน |
+
+ลำดับการทำงาน: event มาถึง → `app.js` เก็บเข้ากลุ่มของคำสั่ง → ถ้าเป็นคำสั่งที่เลือกอยู่ เรียก `narration.js` สร้างฉากและขั้นตอนใหม่ → `playback.js` คุมว่าอยู่ขั้นไหน → `flow.js` และ `story.js` วาดขั้นนั้น
+
+## 10. กติกาการแก้สัญญากลาง
 
 1. แก้ `parser.h` หรือรูปแบบ event ต้องแก้ไฟล์นี้ใน commit เดียวกัน
 2. เพิ่มฟิลด์หรือ event ชนิดใหม่ได้ แต่ห้ามลบหรือเปลี่ยนความหมายของของเดิม

@@ -39,8 +39,10 @@ SeeSh คือ shell ที่เราเขียนขึ้นเองด�
 - หน้าเว็บ Step Mode: เลือกคำสั่ง แล้วดูทีละขั้นหรือเล่นอัตโนมัติ พร้อมอธิบายข้อผิดพลาด
 
 **ไม่ทำ**
-- Scripting (`if`, `for`), ตัวแปร (`$VAR`), wildcard (`*.c`)
-- `&&`, `||`, `;`, `fg`, `!!` และ background pipeline
+- Scripting (`if`, `for`)
+- `&&`, `||`, `;`, `fg`, `bg`, Ctrl+Z, `!!` และ background pipeline
+- ใช้ built-in ใน pipe (เช่น `history | grep ls`)
+- `~` และการแปลงตัวแปรหรือ wildcard
 - ปุ่มลูกศรแก้ไขคำสั่ง และ auto-complete
 
 ## 5. โครงสร้าง
@@ -48,9 +50,9 @@ SeeSh คือ shell ที่เราเขียนขึ้นเองด�
 ```mermaid
 flowchart LR
     U[ผู้ใช้พิมพ์คำสั่ง] --> S[SeeSh<br/>shell ภาษา C]
-    S -->|fork / exec / pipe| K[Kernel<br/>รันคำสั่งจริง]
+    S -->|fork / exec / pipe / dup2| K[Kernel<br/>รันคำสั่งจริง]
     S -->|ส่ง event JSON<br/>ผ่าน FIFO| V[seesh-viewer<br/>เว็บเซิร์ฟเวอร์ C]
-    V --> W[หน้าเว็บ<br/>Step Mode]
+    V -->|HTTP + Server-Sent Events| W[หน้าเว็บ<br/>Step Mode]
 ```
 
 - **Shell แยกจากหน้าเว็บ:** shell คืองานหลักของวิชา ต้องใช้งานได้ปกติแม้ไม่ได้เปิดหน้าเว็บ
@@ -119,13 +121,14 @@ flowchart LR
 - [x] `make test` ผ่านบน WSL
 
 **5. เอกสาร**
-- [x] `README.md`
+- [x] `README.md` พร้อมวิธีติดตั้ง วิธีใช้ และแก้ปัญหาที่พบบ่อย
 - [x] `docs/design.md`
 - [x] `docs/plan.md`
 - [x] Comment ในโค้ด
+- [x] Progress report และ Final report (`docs/`)
 
 **6. ส่งงานตาม Syllabus**
-- [ ] Final report: สถาปัตยกรรม, system call ที่ใช้, features, ผลการทดสอบ, ปัญหาที่เจอและวิธีแก้
+- [x] Final report: สถาปัตยกรรม, system call ที่ใช้, features, ผลการทดสอบ, ปัญหาที่เจอและวิธีแก้
 - [x] สไลด์นำเสนอ
 - [x] ทุกคนอธิบายได้ทุกส่วนของโปรเจกต์ และ demo คนเดียวได้
 - [x] ซ้อม demo บนเครื่องที่จะใช้จริงอย่างน้อย 2 รอบ
